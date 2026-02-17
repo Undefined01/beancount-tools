@@ -1,4 +1,4 @@
-from beancount.parser import parser, printer
+from beancount.parser import printer
 
 
 class Base:

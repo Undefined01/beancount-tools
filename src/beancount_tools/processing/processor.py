@@ -4,11 +4,11 @@ Transaction Processor for Beancount Files
 Loads beancount files, applies rule-based transformations, and writes back.
 """
 
+from typing import Any, Dict
+
 from beancount import loader
 from beancount.core import data
 from beancount.parser import printer
-from typing import Dict, Any, List
-import io
 
 from beancount_tools.rules import RuleEngine
 

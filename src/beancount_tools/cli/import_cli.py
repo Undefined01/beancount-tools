@@ -12,11 +12,7 @@ from typing import List
 
 from beancount.parser import printer
 
-from beancount_tools.importers import (
-    AlipayImporter,
-    WeChatImporter,
-)
-
+from beancount_tools.importers import AlipayImporter, WeChatImporter
 
 # Map of importers to try based on file patterns
 IMPORTERS = [
@@ -42,7 +38,7 @@ def detect_importer(filename: str, byte_content: bytes, entries, option_map):
         try:
             importer = importer_class(filename, byte_content, entries, option_map)
             return importer
-        except (ValueError, RuntimeError, Exception) as e:
+        except (ValueError, RuntimeError, Exception):
             # This importer can't handle this file, try next
             continue
     return None
@@ -68,9 +64,6 @@ def import_file(input_file: str, verbose: bool = False) -> List:
     # Read input file
     if verbose:
         print(f"Reading: {input_file}")
-
-    with open(input_file, "rb") as f:
-        byte_content = f.read()
 
     # Detect and initialize importer
     if "支付宝" in input_file:
@@ -169,9 +162,7 @@ Supported file formats:
     # Import all files
     all_transactions = []
     for input_file in args.input_files:
-        transactions = import_file(
-            input_file, verbose=args.verbose
-        )
+        transactions = import_file(input_file, verbose=args.verbose)
         all_transactions.extend(transactions)
 
     if not all_transactions:

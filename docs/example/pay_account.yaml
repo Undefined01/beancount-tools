@@ -1,35 +1,28 @@
 rules:
-
   - when:
       transaction_ali_account: "工商银行储蓄卡(1234)"
     then:
       transactionAccount: Assets:Bank:CN:ICBC-1234
-  
   - when:
       transaction_ali_account: "工商银行储蓄卡(5678)"
     then:
       transactionAccount: Assets:Bank:CN:ICBC-5678
-  
   - when:
       transaction_ali_account: "招商银行储蓄卡(5678)"
     then:
       transactionAccount: Assets:Bank:CN:CMB-5678
-
   - when:
       transaction_ali_account: "余额宝"
     then:
       transactionAccount: Assets:Digital:Alipay:YuEBao
-
   - when:
       transaction_ali_account: "账户余额"
     then:
       transactionAccount: Assets:Digital:Alipay:Balance
-  
   - when:
       transaction_ali_account: "哈啰骑行卡"
     then:
       transactionAccount: Assets:Digital:Alipay:Balance
-  
   - when:
       transaction_wechat_account: "余额"
     then:

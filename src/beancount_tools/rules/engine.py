@@ -6,8 +6,9 @@ according to the README.md specification.
 """
 
 import re
-import yaml
 from typing import Any, Dict, List, Optional, Union
+
+import yaml
 
 
 class RuleEngine:

@@ -1,20 +1,15 @@
-import calendar
-import csv
-import re
-from datetime import date
-from io import BytesIO, StringIO
-from decimal import Decimal
-
-import dateparser
 import datetime
-from beancount import loader
-from beancount.core import data
-from beancount.core.data import Note, Transaction
+from datetime import date
+from decimal import Decimal
+from io import StringIO
 from pathlib import Path
 
-from beancount_tools.utils import DictReaderStrip
-from .base import Base
+import dateparser
 import pandas as pd
+from beancount.core import data
+from beancount.core.data import Transaction
+
+from .base import Base
 
 header_mapping = {
     "交易分类": "category",
@@ -36,11 +31,10 @@ class AlipayImporter(Base):
         filename = Path(filename)
         assert filename.suffix == ".csv", "Alipay Importer only supports .csv files"
 
-
         with open(filename, "rb") as f:
             lines = f.readlines()
         # Filter out non-transaction lines (e.g., summary lines) by checking the number of commas
-        transaction_lines = [x.decode('gbk') for x in lines if x.count(b",") >= 6]
+        transaction_lines = [x.decode("gbk") for x in lines if x.count(b",") >= 6]
         content = "".join(transaction_lines)
         self.content = content
         self.df = pd.read_csv(StringIO(content), skip_blank_lines=False)
@@ -49,13 +43,15 @@ class AlipayImporter(Base):
         for col in self.df.columns:
             if self.df[col].dtype == "str":
                 self.df[col] = self.df[col].str.strip()
-        
+
         # replace all na with empty string
         self.df = self.df.fillna("")
 
         # replace 金额 column with Decimal
-        self.df["金额"] = self.df["金额"].apply(lambda x: Decimal(str(x)) if x != "" else Decimal(0))
-        
+        self.df["金额"] = self.df["金额"].apply(
+            lambda x: Decimal(str(x)) if x != "" else Decimal(0)
+        )
+
     def parse(self):
         transactions = []
         for _, row in self.df.iterrows():

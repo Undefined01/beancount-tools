@@ -1,9 +1,6 @@
 from shutil import copyfile
-from itertools import combinations
-from collections import namedtuple
-from beancount import loader
-from beancount.parser import printer
 
+from beancount.parser import printer
 from beanquery import query
 
 from beancount_tools.utils import get_object_bql_result
@@ -109,7 +106,7 @@ class Deduplicate:
             same_trade = False
             item_timestamp = item.timestamp.replace("'", "")
             # 如果已经被录入了，且unique_no相同，则判定为是同导入器导入的同交易，啥都不做
-            if unique_no != None:
+            if unique_no is not None:
                 if unique_no in entry.meta and unique_no in item.metas:
                     if item.metas[unique_no] == entry.meta[unique_no]:
                         same_trade = True
@@ -134,7 +131,7 @@ class Deduplicate:
             # 例如，手工输入的交易，打上支付宝订单号。
             # 另外因为支付宝的傻逼账单，这里还需要承担支付手段更新的功能
             if (
-                (not "timestamp" in entry.meta)
+                ("timestamp" not in entry.meta)
                 or item_timestamp == entry.meta["timestamp"]
                 or item.timestamp == "None"
                 or item.timestamp == ""
@@ -149,7 +146,7 @@ class Deduplicate:
                 for key, value in entry.meta.items():
                     if key == "filename" or key == "lineno":
                         continue
-                    if not key in item.metas:
+                    if key not in item.metas:
                         self.append_text_to_transaction(
                             item.filename,
                             int(item.lineno),
