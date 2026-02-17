@@ -1,0 +1,88 @@
+# Example Rules for Beancount Post-Processing
+# Based on Tree Rules v1 Specification
+
+rules:
+  - description: "充值缴费分类"
+    when:
+      category: 充值缴费
+    children:
+      - description: "中国电信话费"
+        when:
+          payee: 中国电信
+        then:
+          counterpartyAccount: Expenses:Subscription:Mobile
+
+      - description: "其他充值缴费"
+        then:
+          counterpartyAccount: Expenses:Subscription:Other
+          +tags: need_review
+
+  - description: "交通出行分类"
+    when:
+      category: 交通出行
+    children:
+      - description: 公共交通
+        when:
+          narration: /地铁|公交/
+        then:
+          counterpartyAccount: Expenses:Transport:Public
+
+      - description: "哈啰单车"
+        when:
+          payee: 哈啰出行
+          narration: 哈啰单车卡抵扣骑行费用
+        then:
+          counterpartyAccount: Expenses:Transport:Bike
+
+      - description: "其他交通"
+        then:
+          counterpartyAccount: Expenses:Transport:Other
+          +tags: need_review
+
+  - description: "投资理财分类"
+    when:
+      category: 投资理财
+    children:
+      - description: "蚂蚁财富"
+        when:
+          payee: 蚂蚁财富
+        then:
+          counterpartyAccount: Assets:Trade:AntFortune
+
+      - description: "其他投资理财"
+        then:
+          counterpartyAccount: Assets:Trade:Other
+          +tags: need_review
+
+  - description: "餐饮美食分类"
+    when:
+      category: 餐饮美食
+    children:
+      - description: "外卖和快餐"
+        when:
+          narration: /美团App|麦当劳/
+        then:
+          counterpartyAccount: Expenses:Food:Dining:Takeout
+
+      - description: "外卖和快餐"
+        when:
+          narration: 美团收银
+        then:
+          counterpartyAccount: Expenses:Food:Dining:Restaurant
+
+      - description: "其他餐饮"
+        then:
+          counterpartyAccount: Expenses:Food:Groceries
+          +tags: need_review
+  
+  - description: "南京大学公共洗衣机"
+    when:
+      payee: 杭州企鹅科技有限公司
+      narration: 企鹅共享
+    then:
+      counterpartyAccount: Expenses:Housing:Maintenance
+      notes: "南京大学公共洗衣机"
+  
+  - description: "未识别"
+    then:
+      +tags: need_review
