@@ -23,6 +23,7 @@ rules:
       transaction_ali_account: "哈啰骑行卡"
     then:
       transactionAccount: Assets:Digital:Alipay:Balance
+
   - when:
       transaction_wechat_account: "余额"
     then:
