@@ -108,9 +108,16 @@ class AlipayImporter(Base):
             if trade_type == "支出":
                 counterparty_account = account_unknown_expenses
                 if status in ["交易成功", "支付成功"]:
-                    pass
+                    # 0元+空付款方式+支付成功 = 电商占位记录（淘宝/1688分期支付），跳过
+                    if (
+                        amount == Decimal(0)
+                        and my_ali_account == ""
+                        and status == "支付成功"
+                    ):
+                        skip_entry = True
                 elif status == "交易关闭":
-                    pass
+                    # 已扣款后关闭（收/付款方式非空），后续会有退款记录
+                    tags.append("refund")
                 else:
                     raise ValueError(f"Unknown status for 支出: {status}")
 
@@ -147,7 +154,7 @@ class AlipayImporter(Base):
                             tags.append("need-review")
                     elif "充值-普通充值" in row["商品说明"]:
                         trade_type = "支出"
-                        counterparty_account = account_unknown_expenses
+                        counterparty_account = account_alipay_cash
                         flags = "!"
                     else:
                         raise ValueError(f"Unknown case for 不计收支: {row}")
