@@ -14,7 +14,7 @@ from .base import Base
 # Column name → metadata key mapping
 header_mapping = {
     "交易类型": "category",
-    "支付方式": "transaction_wechat_account",
+    "支付方式": "wechat_account",
     "交易单号": "transaction_id",
     "商户单号": "merchant_order_id",
     "备注": "note",
@@ -28,7 +28,7 @@ account_unknown_income = "Income:Unknown"
 
 # --- Valid statuses per trade direction ---
 # 收入: normal completed income (转账收入, 红包, 二维码收款)
-INCOME_OK_STATUSES = {"已存入零钱", "已收钱"}
+INCOME_OK_STATUSES = {"已存入零钱", "已收钱", "已到账"}
 # 支出: normal completed expense
 EXPENSE_OK_STATUSES = {"支付成功", "对方已收钱", "已转账", "充值成功"}
 # 中性 (/): internal transfers

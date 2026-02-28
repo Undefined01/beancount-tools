@@ -39,9 +39,9 @@ beancount-postprocess imported.bean config/rules.yaml -v
 
 ```yaml
 rules:
-  - when:
+  - match:
       payee: /美团/
-    then:
+    apply:
       counterpartyAccount: Expenses:Food:Delivery
 ```
 
@@ -49,14 +49,14 @@ rules:
 
 ```yaml
 rules:
-  - when:
+  - match:
       payee: /美团/
-    then:
+    apply:
       counterpartyAccount: Expenses:Food:Delivery
     children:
-      - when:
+      - match:
           narration: /早餐/
-        then:
+        apply:
           counterpartyAccount: Expenses:Food:Breakfast
 ```
 
@@ -64,11 +64,11 @@ rules:
 
 ```yaml
 rules:
-  - when:
-      all:
+  - match:
+      $all:
         - payee: /美团/
         - narration: /外卖/
-    then:
+    apply:
       counterpartyAccount: Expenses:Food:Delivery
 ```
 
@@ -76,43 +76,44 @@ rules:
 
 ```yaml
 rules:
-  - when:
-      any:
+  - match:
+      $any:
         - payee: /美团/
         - payee: /饿了么/
-    then:
+    apply:
       counterpartyAccount: Expenses:Food:Delivery
 ```
 
 ### Add Tags
 
 ```yaml
-then:
+apply:
   counterpartyAccount: Expenses:Food:Delivery
-  +tags: food
-  +tags: delivery
+  $add:
+    tags: food
 ```
 
 ### Remove Tags
 
 ```yaml
-then:
-  -tags: uncategorized
+apply:
+  $remove:
+    tags: uncategorized
 ```
 
 ## Pattern Matching
 
-### Substring (case-insensitive)
+### Exact Match
 
 ```yaml
-when:
-  payee: 美团  # Matches if payee contains "美团"
+match:
+  payee: 美团  # Matches only if payee is exactly "美团"
 ```
 
-### Regex
+### Regex Search
 
 ```yaml
-when:
+match:
   payee: /^美团/              # Starts with
   payee: /美团$/              # Ends with
   payee: /美团|饿了么/        # OR
@@ -124,47 +125,51 @@ when:
 ### Food Delivery
 
 ```yaml
-- when:
-    any:
+- match:
+    $any:
       - payee: /美团/
       - payee: /饿了么/
-  then:
+  apply:
     counterpartyAccount: Expenses:Food:Delivery
-    +tags: food
+    $add:
+      tags: food
 ```
 
 ### Transportation
 
 ```yaml
-- when:
-    any:
+- match:
+    $any:
       - payee: /滴滴/
       - payee: /Uber/
-  then:
+  apply:
     counterpartyAccount: Expenses:Transport:Taxi
-    +tags: transport
+    $add:
+      tags: transport
 ```
 
 ### Shopping
 
 ```yaml
-- when:
-    any:
+- match:
+    $any:
       - payee: /淘宝/
       - payee: /京东/
-  then:
+  apply:
     counterpartyAccount: Expenses:Shopping:Online
-    +tags: shopping
+    $add:
+      tags: shopping
 ```
 
 ### Refunds
 
 ```yaml
-- when:
+- match:
     narration: /退款/
-  then:
-    +tags: refund
+  apply:
     flag: "!"
+    $add:
+      tags: refund
 ```
 
 ## Workflow

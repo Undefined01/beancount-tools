@@ -287,7 +287,7 @@ Done!
 
 1. **Load**: Reads beancount file and rules
 2. **Match**: For each transaction, evaluates rules in order
-3. **Apply**: When a rule matches, applies the `then` actions
+3. **Apply**: When a rule matches, applies the `apply` actions
 4. **Recurse**: Processes child rules if present
 5. **Stop**: Stops at first matching rule (stop-on-match semantics)
 6. **Write**: Outputs updated transactions
@@ -298,14 +298,14 @@ Rules are evaluated using tree-based matching:
 
 ```yaml
 rules:
-  - when:
+  - match:
       payee: /美团/
-    then:
+    apply:
       counterpartyAccount: Expenses:Food:Delivery
     children:
-      - when:
+      - match:
           narration: /早餐/
-        then:
+        apply:
           counterpartyAccount: Expenses:Food:Breakfast
 ```
 

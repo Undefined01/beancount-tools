@@ -118,14 +118,14 @@ Define tree-based rules for transaction categorization:
 
 ```yaml
 rules:
-  - when:
+  - match:
       payee: /美团/
-    then:
+    apply:
       counterpartyAccount: Expenses:Food:Delivery
     children:
-      - when:
+      - match:
           narration: /早餐/
-        then:
+        apply:
           counterpartyAccount: Expenses:Food:Breakfast
 ```
 
@@ -210,11 +210,12 @@ Rules use tree-based matching with stop-on-match semantics:
 
 ```yaml
 rules:
-  - when:
+  - match:
       payee: /滴滴/
-    then:
+    apply:
       counterpartyAccount: Expenses:Transport:Taxi
-      +tags: transport
+      $add:
+        tags: transport
 ```
 
 See [Rule Engine Documentation](docs/RULES.md) for details.
@@ -266,9 +267,12 @@ Contributions welcome! Please:
 3. Update documentation
 4. Keep importers simple (no account guessing)
 
-## License
+Formatter:
 
-[Add your license here]
+- Use `black` for Python code
+- Use `prettier` for YAML files
+- Use `markdownlint` for documentation
+- Use `beancount-format` for beancount files
 
 ## Acknowledgments
 

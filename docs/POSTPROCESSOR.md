@@ -198,14 +198,14 @@ Rules are evaluated in order using tree-based matching:
 
 ```yaml
 rules:
-  - when:
+  - match:
       payee: /美团/
-    then:
+    apply:
       counterpartyAccount: Expenses:Food:Delivery
     children:
-      - when:
+      - match:
           narration: /早餐/
-        then:
+        apply:
           counterpartyAccount: Expenses:Food:Breakfast
 ```
 
@@ -220,12 +220,12 @@ Process:
 
 ### Action Execution
 
-When a rule matches, actions in `then` are executed:
+When a rule matches, actions in `apply` are executed:
 
 #### Set/Replace
 
 ```yaml
-then:
+apply:
   counterpartyAccount: Expenses:Food:Delivery
 ```
 
@@ -234,8 +234,9 @@ Sets field to value, replacing existing value.
 #### Add to Set/List
 
 ```yaml
-then:
-  +tags: food
+apply:
+  $add:
+    tags: food
 ```
 
 Adds value to set/list with deduplication.
@@ -243,8 +244,9 @@ Adds value to set/list with deduplication.
 #### Remove from Set/List
 
 ```yaml
-then:
-  -tags: uncategorized
+apply:
+  $remove:
+    tags: uncategorized
 ```
 
 Removes value from set/list.
@@ -252,8 +254,9 @@ Removes value from set/list.
 #### Delete Field
 
 ```yaml
-then:
-  -custom_field: null
+apply:
+  $remove:
+    custom_field: null
 ```
 
 Deletes field from metadata.
@@ -275,7 +278,7 @@ The `counterpartyAccount` field updates the first posting:
 
 **Rule**:
 ```yaml
-then:
+apply:
   counterpartyAccount: Expenses:Food:Delivery
 ```
 
@@ -299,7 +302,7 @@ The `transactionAccount` field updates the second posting:
 
 **Rule**:
 ```yaml
-then:
+apply:
   transactionAccount: Assets:Bank:CCB
 ```
 
@@ -316,9 +319,10 @@ Metadata fields are added to transaction metadata:
 
 **Rule**:
 ```yaml
-then:
+apply:
   category: "food"
-  +tags: delivery
+  $add:
+    tags: delivery
 ```
 
 **Result**:
@@ -346,9 +350,9 @@ then:
 **Rules**:
 ```yaml
 rules:
-  - when:
+  - match:
       payee: /美团/
-    then:
+    apply:
       counterpartyAccount: Expenses:Food:Delivery
 ```
 
@@ -371,14 +375,14 @@ rules:
 **Rules**:
 ```yaml
 rules:
-  - when:
+  - match:
       payee: /美团/
-    then:
+    apply:
       counterpartyAccount: Expenses:Food:Delivery
     children:
-      - when:
+      - match:
           narration: /早餐/
-        then:
+        apply:
           counterpartyAccount: Expenses:Food:Breakfast
 ```
 
@@ -401,12 +405,14 @@ rules:
 **Rules**:
 ```yaml
 rules:
-  - when:
+  - match:
       payee: /美团/
-    then:
+    apply:
       counterpartyAccount: Expenses:Food:Delivery
-      +tags: food
-      +tags: delivery
+      $add:
+        tags:
+          - food
+          - delivery
 ```
 
 **Output**:
@@ -428,13 +434,14 @@ rules:
 **Rules**:
 ```yaml
 rules:
-  - when:
+  - match:
       payee: /美团/
-    then:
+    apply:
       counterpartyAccount: Expenses:Food:Delivery
-      +tags: food
       category: "dining"
       flag: "*"
+      $add:
+        tags: food
 ```
 
 **Output**:
@@ -477,7 +484,7 @@ Native fields (payee, narration, flag) are updated directly:
 
 **Rules**:
 ```yaml
-then:
+apply:
   payee: "Meituan Delivery"
   narration: "Lunch order"
   flag: "!"
@@ -546,7 +553,7 @@ Fix: Validate YAML syntax
 If a rule references a non-existent field, it simply doesn't match:
 
 ```yaml
-when:
+match:
   nonexistent_field: value
 ```
 
@@ -555,7 +562,7 @@ No error, just no match.
 #### Invalid Regex
 
 ```yaml
-when:
+match:
   payee: /[invalid/
 ```
 

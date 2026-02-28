@@ -14,8 +14,8 @@ from .base import Base
 
 header_mapping = {
     "交易分类": "category",
-    "对方账号": "counterparty_ali_account",
-    "收/付款方式": "transaction_ali_account",
+    "对方账号": "counterparty_alipay_identifier",
+    "收/付款方式": "alipay_account",
     "交易订单号": "transaction_id",
     "商家订单号": "merchant_order_id",
     "备注": "note",
@@ -151,7 +151,7 @@ class AlipayImporter(Base):
                         counterparty_account = account_unknown_expenses
                         transaction_account = account_reimbursements
                         if "&" in my_ali_account:
-                            tags.append("need-review")
+                            tags.append("need_review")
                     elif "充值-普通充值" in row["商品说明"]:
                         trade_type = "支出"
                         counterparty_account = account_alipay_cash
