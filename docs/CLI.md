@@ -1,300 +1,138 @@
-# CLI Reference
+# CLI 参考手册
 
-Command-line interface documentation for beancount-tools.
+`beancount-tools` 提供统一的命令行入口 **`bct`**，包含三个子命令。
 
-## Commands
-
-- [beancount-import](#beancount-import) - Import transactions from financial institutions
-- [beancount-postprocess](#beancount-postprocess) - Apply rules to categorize transactions
+```
+bct
+├── import   – 导入交易
+├── process  – 规则处理
+└── convert  – 文件转换
+```
 
 ---
 
-## beancount-import
-
-Import transactions from Chinese financial institutions.
-
-### Synopsis
+## 全局选项
 
 ```bash
-beancount-import [OPTIONS] INPUT_FILES...
+bct -V / --version   # 显示版本号
+bct -h / --help      # 显示帮助信息
 ```
 
-### Description
+---
 
-The `beancount-import` command parses transaction files from various Chinese banks and payment platforms, automatically detects the file format, deduplicates against existing transactions, and outputs beancount-formatted transactions.
+## bct import
 
-**Important**: Imported transactions use generic placeholder accounts (`Expenses:Unknown`, `Income:Unknown`). You must run `beancount-postprocess` to categorize them properly.
+从支付宝 / 微信支付导出的账单文件中解析交易。
 
-### Options
-
-#### Required
-
-- `-b, --beancount-file FILE`
-
-  Path to your main beancount file. Used for deduplication to prevent importing duplicate transactions.
-
-#### Optional
-
-- `-o, --output FILE`
-
-  Output file for imported transactions. If not specified, outputs to stdout.
-
-- `--dry-run`
-
-  Preview what would be imported without writing any files. Useful for testing.
-
-- `-v, --verbose`
-
-  Enable verbose output showing detailed import progress and statistics.
-
-- `--unmatched-report [FILE]`
-
-  Generate a report of unmatched transactions. If FILE is not specified, defaults to `out-unmatched.bean`.
-
-  The report includes:
-  - Transactions in import files that don't match existing records
-  - Transactions in beancount file that don't match imported records
-
-- `--append`
-
-  Append to output file instead of overwriting. Useful for incremental imports.
-
-### Arguments
-
-- `INPUT_FILES...`
-
-  One or more files to import. Supports multiple file formats:
-  - CSV files (Alipay, WeChat)
-  - ZIP files (Alipay, WeChat)
-  - EML email files (ICBC, ABC)
-  - XLS files (CCB, YuEBao)
-  - HTML files (ICBC)
-
-### Examples
-
-#### Basic Import
+### 用法
 
 ```bash
-# Import single file
-beancount-import alipay.csv -b main.bean -o imported.bean
+bct import [选项] 文件...
 ```
 
-#### Multiple Files
+### 选项
+
+| 选项 | 说明 |
+|------|------|
+| `-o, --output PATH` | 输出 .bean 文件。省略则输出到 stdout |
+| `--dry-run` | 预览模式，不写入文件 |
+| `--append` | 追加到已有文件而非覆盖 |
+| `-v, --verbose` | 显示详细处理信息 |
+| `-h, --help` | 显示帮助 |
+
+### 示例
 
 ```bash
-# Import from multiple sources
-beancount-import \
-  alipay_jan.csv \
-  wechat_jan.csv \
-  icbc_statement.eml \
-  -b main.bean \
-  -o jan_imported.bean
+# 导入单个文件
+bct import 支付宝交易记录.csv -o imported.bean
+
+# 批量导入多个来源
+bct import alipay_jan.csv wechat_jan.csv -o jan.bean -v
+
+# 预览（不写文件）
+bct import alipay.csv --dry-run
+
+# 追加到已有文件
+bct import alipay_feb.csv -o imported.bean --append
 ```
 
-#### Dry Run
+### 支持的文件格式
 
-```bash
-# Preview what would be imported
-beancount-import alipay.csv -b main.bean --dry-run
-```
+| 平台 | 格式 | 说明 |
+|------|------|------|
+| 支付宝 | `.csv` | 支付宝交易记录明细查询导出 |
+| 微信支付 | `.csv` | 微信支付账单明细（UTF-8） |
+| 微信支付 | `.xlsx` | 微信支付账单明细（Excel） |
 
-#### With Unmatched Report
+### 导入结果说明
 
-```bash
-# Generate report of unmatched transactions
-beancount-import alipay.csv -b main.bean -o imported.bean \
-  --unmatched-report unmatched.bean
-```
-
-#### Verbose Mode
-
-```bash
-# See detailed import progress
-beancount-import alipay.csv -b main.bean -o imported.bean -v
-```
-
-Output:
-```
-Loading beancount file: main.bean
-Reading: alipay.csv
-Using importer: AlipayImporter
-Import Alipay: 账户：example@email.com
-Importing 美团外卖 at 2024-01-15 12:30:00
-Importing 滴滴出行 at 2024-01-15 18:45:00
-...
-Imported 45 transactions from alipay.csv
-
-Total transactions imported: 45
-Writing to: imported.bean
-Successfully imported 45 transactions to imported.bean
-```
-
-#### Append Mode
-
-```bash
-# Append to existing file
-beancount-import alipay_feb.csv -b main.bean -o imported.bean --append
-```
-
-### Supported File Formats
-
-| Format | Institution | File Extension | Notes |
-|--------|-------------|----------------|-------|
-| CSV | Alipay | `.csv` | 支付宝交易记录明细查询 |
-| CSV | Alipay Proven | `.csv` | Contains "导出信息" |
-| ZIP | Alipay | `.zip` | Contains CSV inside |
-| CSV | WeChat | `.csv` | 微信支付账单明细 |
-| ZIP | WeChat | `.zip` | Contains CSV inside |
-| EML | ICBC Credit | `.eml` | Email from 中国工商银行 |
-| HTML | ICBC Debit | `.html`, `.htm` | Web export |
-| EML | ABC Credit | `.eml` | Email with 金穗信用卡 |
-| XLS | CCB Debit | `.xls` | China Construction Bank |
-| XLS | YuEBao | `.xls` | 余额宝收支明细 |
-
-### How It Works
-
-1. **File Detection**: Automatically detects file format and selects appropriate importer
-2. **Parsing**: Extracts transaction data (date, payee, amount, etc.)
-3. **Deduplication**: Compares against existing beancount file to avoid duplicates
-4. **Output**: Generates beancount transactions with generic accounts
-
-### Transaction Structure
-
-Imported transactions follow this structure:
+导入后的交易使用占位账户（如 `Expenses:Unknown`），可通过 `bct process` 进行分类。
 
 ```beancount
 2024-01-15 * "美团外卖" "午餐订单"
-  alipay_trade_no: "2024011522001234567890"
-  timestamp: "1705294200"
+  source: "alipay"
+  transaction_id: "2024011522001234567890"
   Expenses:Unknown                    35.50 CNY
-  Assets:Company:Alipay:StupidAlipay -35.50 CNY
+  Assets:Digital:Alipay:Cash         -35.50 CNY
 ```
 
-Note:
-- **First posting**: Counterparty account (generic placeholder)
-- **Second posting**: Your specific account (bank/payment platform)
-- **Metadata**: Transaction IDs, timestamps for deduplication
+### 自动检测机制
 
-### Exit Codes
+`bct import` 按以下逻辑自动选择导入器：
 
-- `0` - Success
-- `1` - Error (file not found, parsing error, no transactions imported)
+1. 对每个注册的导入器调用 `can_handle(path)`，检测文件头特征
+2. 第一个返回 `True` 的导入器被选中
+3. 如果 `can_handle` 全部失败，退而逐个尝试构造函数
+4. 都失败则报错
 
-### Common Issues
+### 退出码
 
-#### No transactions imported
-
-**Problem**: Command completes but no transactions are imported.
-
-**Solutions**:
-- Verify file format matches expected format
-- Use `--verbose` to see detailed error messages
-- Check file encoding (Chinese files should be GBK or UTF-8)
-- Try `--dry-run` to see if transactions are detected
-
-#### File format not recognized
-
-**Problem**: "No importer found for file"
-
-**Solutions**:
-- Verify file extension is correct
-- Check file content matches expected format
-- Ensure file is not corrupted
-- Try opening file in text editor to verify content
-
-#### Duplicate transactions
-
-**Problem**: Transactions appear multiple times
-
-**Solutions**:
-- Ensure you're using the correct beancount file with `-b`
-- Check that transaction IDs are unique
-- Review unmatched report with `--unmatched-report`
+| 码 | 含义 |
+|----|------|
+| `0` | 成功 |
+| `1` | 无法导入（文件不存在 / 格式不支持 / 解析错误） |
 
 ---
 
-## beancount-postprocess
+## bct process
 
-Apply tree-based rules to categorize transactions.
+对已导入的 .bean 文件应用 YAML 规则，进行自动分类。
 
-### Synopsis
-
-```bash
-beancount-postprocess [OPTIONS] BEAN_FILE RULES_FILE
-```
-
-### Description
-
-The `beancount-postprocess` command applies categorization rules from a YAML file to beancount transactions. It updates generic placeholder accounts (`Expenses:Unknown`, `Income:Unknown`) with specific categories based on transaction patterns.
-
-### Options
-
-- `-o, --output FILE`
-
-  Output file for processed transactions. If not specified, updates the input file in-place.
-
-- `-v, --verbose`
-
-  Enable verbose output showing which transactions are modified and which rules match.
-
-### Arguments
-
-- `BEAN_FILE`
-
-  Input beancount file containing transactions to process.
-
-- `RULES_FILE`
-
-  YAML file containing categorization rules.
-
-### Examples
-
-#### Basic Processing
+### 用法
 
 ```bash
-# Process and update in-place
-beancount-postprocess imported.bean config/rules.yaml
+bct process [选项] BEAN_FILE RULES_FILE
 ```
 
-#### With Output File
+### 选项
+
+| 选项 | 说明 |
+|------|------|
+| `-o, --output PATH` | 输出文件。省略则原地更新 |
+| `-v, --verbose` | 显示匹配详情和统计 |
+| `-h, --help` | 显示帮助 |
+
+### 示例
 
 ```bash
-# Process and write to new file
-beancount-postprocess imported.bean config/rules.yaml -o categorized.bean
+# 输出到新文件
+bct process imported.bean rules.yaml -o categorized.bean
+
+# 原地更新（覆盖原文件）
+bct process imported.bean rules.yaml
+
+# 详细模式，查看哪些交易被修改
+bct process imported.bean rules.yaml -v
 ```
 
-#### Verbose Mode
+### 处理流程
 
-```bash
-# See which rules match
-beancount-postprocess imported.bean config/rules.yaml -v
-```
+1. 加载 .bean 文件中的所有记录
+2. 加载 YAML 规则
+3. 对每笔 Transaction，提取为字典 → 匹配规则 → 应用修改
+4. 将修改后的记录写回
 
-Output:
-```
-Loading beancount file: imported.bean
-Loading rules from: config/rules.yaml
-Modified transaction: 2024-01-15 美团外卖 午餐订单
-Modified transaction: 2024-01-15 滴滴出行 打车
-...
-
-Processed 45 transactions, modified 42
-Writing to: imported.bean
-Done!
-```
-
-### How It Works
-
-1. **Load**: Reads beancount file and rules
-2. **Match**: For each transaction, evaluates rules in order
-3. **Apply**: When a rule matches, applies the `apply` actions
-4. **Recurse**: Processes child rules if present
-5. **Stop**: Stops at first matching rule (stop-on-match semantics)
-6. **Write**: Outputs updated transactions
-
-### Rule Matching
-
-Rules are evaluated using tree-based matching:
+### 规则文件格式
 
 ```yaml
 rules:
@@ -309,131 +147,108 @@ rules:
           counterpartyAccount: Expenses:Food:Breakfast
 ```
 
-Process:
-1. Check if payee contains "美团"
-2. If yes, set account to `Expenses:Food:Delivery`
-3. Check child rules
-4. If narration contains "早餐", override to `Expenses:Food:Breakfast`
-5. Stop processing siblings
+→ 完整语法请参考 [规则引擎文档](RULES.md)
 
-### Transaction Fields
+### 退出码
 
-Available fields for matching:
-
-- `payee` - Transaction payee
-- `narration` - Transaction description
-- `date` - Transaction date (YYYY-MM-DD)
-- `flag` - Transaction flag (*, !, etc.)
-- `tags` - Transaction tags
-- `counterpartyAccount` - First posting account
-- `transactionAccount` - Second posting account
-- Any metadata field (e.g., `alipay_trade_no`, `timestamp`)
-
-### Exit Codes
-
-- `0` - Success
-- `1` - Error (file not found, invalid YAML, parsing error)
-
-### Common Issues
-
-#### Rules not applying
-
-**Problem**: Transactions remain uncategorized
-
-**Solutions**:
-- Use `--verbose` to see which rules match
-- Check YAML syntax with a validator
-- Verify field names match transaction data
-- Test with simple rules first
-- Check regex patterns are correct
-
-#### YAML syntax error
-
-**Problem**: "Error loading rules"
-
-**Solutions**:
-- Validate YAML syntax online
-- Check indentation (use spaces, not tabs)
-- Ensure colons have spaces after them
-- Quote strings with special characters
-
-#### Wrong accounts assigned
-
-**Problem**: Transactions categorized incorrectly
-
-**Solutions**:
-- Review rule order (first match wins)
-- Check regex patterns match intended text
-- Use more specific patterns
-- Test rules incrementally
+| 码 | 含义 |
+|----|------|
+| `0` | 成功 |
+| `1` | 文件不存在 / YAML 语法错误 / 处理失败 |
 
 ---
 
-## Workflow Example
+## bct convert
 
-Complete workflow from import to categorized transactions:
+将 XLSX 文件转换为 UTF-8 CSV，方便后续导入。
+
+### 用法
 
 ```bash
-# Step 1: Import transactions
-beancount-import \
-  alipay_jan.csv \
-  wechat_jan.csv \
-  -b main.bean \
-  -o jan_imported.bean \
-  -v
+bct convert [选项] 文件...
+```
 
-# Step 2: Review imported transactions
-less jan_imported.bean
+### 选项
 
-# Step 3: Apply categorization rules
-beancount-postprocess \
-  jan_imported.bean \
-  config/rules.yaml \
-  -o jan_categorized.bean \
-  -v
+| 选项 | 说明 |
+|------|------|
+| `-o, --output PATH` | 输出 CSV 文件或目录 |
+| `-h, --help` | 显示帮助 |
 
-# Step 4: Review categorized transactions
+### 示例
+
+```bash
+# 转换单个文件（输出为同名 .csv）
+bct convert wechat_bill.xlsx
+
+# 指定输出路径
+bct convert wechat_bill.xlsx -o bill.csv
+
+# 批量转换到指定目录
+bct convert *.xlsx -o csv_output/
+```
+
+---
+
+## 旧命令兼容
+
+以下旧命令仍可使用，但推荐迁移到 `bct`：
+
+| 旧命令 | 等价新命令 |
+|--------|-----------|
+| `beancount-import` | `bct import` |
+| `beancount-postprocess` | `bct process` |
+
+---
+
+## 完整工作流示例
+
+```bash
+# 1. 将 XLSX 转为 CSV（如果需要）
+bct convert wechat_bill.xlsx -o wechat.csv
+
+# 2. 导入交易
+bct import alipay.csv wechat.csv -o jan_imported.bean -v
+
+# 3. 应用分类规则
+bct process jan_imported.bean rules.yaml -o jan_categorized.bean -v
+
+# 4. 审核
 less jan_categorized.bean
 
-# Step 5: Validate with beancount
+# 5. 验证语法
 bean-check jan_categorized.bean
 
-# Step 6: Merge into main file
+# 6. 合并到主账本
 cat jan_categorized.bean >> main.bean
 ```
 
 ---
 
-## Tips and Best Practices
+## 常见问题
 
-### Import Tips
+### 没有导入任何交易
 
-1. **Always use -b flag**: Ensures proper deduplication
-2. **Import incrementally**: Process one month at a time
-3. **Use --dry-run first**: Preview before committing
-4. **Generate unmatched reports**: Helps with reconciliation
-5. **Keep source files**: Don't delete original exports
+- 检查文件格式是否正确（支付宝需要 CSV，微信支持 CSV 和 XLSX）
+- 使用 `-v` 查看详细错误信息
+- 使用 `--dry-run` 检查是否能检测到交易
 
-### Postprocessing Tips
+### 规则不生效
 
-1. **Start with broad rules**: Refine over time
-2. **Use verbose mode**: Understand rule behavior
-3. **Test on small files**: Validate rules before bulk processing
-4. **Version control rules.yaml**: Track rule changes
-5. **Document complex rules**: Add comments in YAML
+- 使用 `-v` 查看哪些规则匹配了
+- 确认 YAML 语法正确（在线校验）
+- 检查字段名是否与交易元数据匹配
+- 从简单规则开始测试
 
-### Workflow Tips
+### 编码错误
 
-1. **Separate import and categorization**: Easier to debug
-2. **Review before merging**: Check categorized transactions
-3. **Use consistent naming**: e.g., `YYYYMM_imported.bean`
-4. **Backup main file**: Before merging new transactions
-5. **Run bean-check**: Validate before committing
+- 支付宝 CSV 默认使用 GBK 编码，工具会自动尝试 UTF-8 和 GBK
+- 微信 CSV 通常使用 UTF-8-BOM
 
 ---
 
-## See Also
+## 参考
 
-- [Rule Engine Documentation](RULES.md) - Complete rule syntax
-- [Postprocessor Details](POSTPROCESSOR.md) - Processing internals
-- [Importer Details](IMPORTERS.md) - File format specifications
+- [规则引擎](RULES.md) — 完整规则语法
+- [后处理器](POSTPROCESSOR.md) — 处理流程详情
+- [速查表](QUICKREF.md) — 日常命令速查

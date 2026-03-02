@@ -1,3 +1,12 @@
+"""
+WeChat Pay (微信支付) transaction importer.
+
+Parses CSV and XLSX export files from WeChat Pay's bill history
+(微信支付账单明细).
+"""
+
+from __future__ import annotations
+
 import datetime
 from datetime import date
 from decimal import Decimal
@@ -7,37 +16,39 @@ from pathlib import Path
 import dateparser
 import pandas as pd
 from beancount.core import data
-from beancount.core.data import Transaction
+from beancount.core.data import Directive, Transaction
 
-from .base import Base
+from .base import BaseImporter
 
 # Column name → metadata key mapping
-header_mapping = {
+_HEADER_MAPPING: dict[str, str] = {
     "交易类型": "category",
+    "交易对方": "counterparty_name",
+    "商品": "description",
+    "收/支": "trade_type",
     "支付方式": "wechat_account",
+    "当前状态": "status",
     "交易单号": "transaction_id",
     "商户单号": "merchant_order_id",
     "备注": "note",
 }
 
-# Account constants (must match accounts.bean)
-account_wechat_cash = "Assets:Digital:WeChat:Cash"
-account_wechat_licai = "Assets:Digital:WeChat:LiCai"
-account_unknown_expenses = "Expenses:Unknown"
-account_unknown_income = "Income:Unknown"
+# Account constants
+ACCOUNT_WECHAT_CASH = "Assets:Digital:WeChat:Cash"
+ACCOUNT_WECHAT_LICAI = "Assets:Digital:WeChat:LiCai"
+ACCOUNT_UNKNOWN_EXPENSES = "Expenses:Unknown"
+ACCOUNT_UNKNOWN_INCOME = "Income:Unknown"
 
 # --- Valid statuses per trade direction ---
-# 收入: normal completed income (转账收入, 红包, 二维码收款)
 INCOME_OK_STATUSES = {"已存入零钱", "已收钱", "已到账"}
-# 支出: normal completed expense
 EXPENSE_OK_STATUSES = {"支付成功", "对方已收钱", "已转账", "充值成功"}
-# 中性 (/): internal transfers
 NEUTRAL_OK_STATUSES = {"支付成功", "提现已到账", "充值完成"}
 
 
-class WeChatImporter(Base):
+class WeChatImporter(BaseImporter):
+    """Import transactions from WeChat Pay CSV / XLSX exports."""
 
-    def __init__(self, filename):
+    def __init__(self, filename: str | Path) -> None:
         filename = Path(filename)
 
         if filename.suffix == ".csv":
@@ -104,15 +115,29 @@ class WeChatImporter(Base):
         df = df.drop(0)
         return df
 
-    def parse(self):
-        transactions = []
+    @staticmethod
+    def can_handle(path: Path) -> bool:
+        """Return ``True`` if *path* looks like a WeChat Pay export."""
+        if path.suffix not in (".csv", ".xlsx"):
+            return False
+        try:
+            with open(path, "rb") as f:
+                head = f.read(8192)
+            text = head.decode("utf-8", errors="ignore")
+            return "微信" in text or ("交易时间" in text and "交易类型" in text)
+        except OSError:
+            return False
+
+    def parse(self) -> list[Directive]:
+        """Parse all rows into beancount ``Transaction`` directives."""
+        transactions: list[Directive] = []
         for idx, row in self.df.iterrows():
-            entry = self._parse_row(row, idx)
+            entry = self._parse_row(row, str(idx))
             if entry is not None:
                 transactions.append(entry)
         return transactions
 
-    def _parse_row(self, row, idx):
+    def _parse_row(self, row: pd.Series, idx: str) -> Directive | None:
         """Parse a single CSV/XLSX row into a beancount Transaction.
 
         Returns None for transactions that should be skipped (e.g. cancelled).
@@ -120,7 +145,7 @@ class WeChatImporter(Base):
         """
         # ---- Build metadata ----
         meta = {}
-        for col_name, meta_key in header_mapping.items():
+        for col_name, meta_key in _HEADER_MAPPING.items():
             val = str(row.get(col_name, "")).strip()
             if val and val != "/":
                 meta[meta_key] = val
@@ -144,8 +169,8 @@ class WeChatImporter(Base):
         payee = str(row["交易对方"]).strip()
         narration = str(row["商品"]).strip()
 
-        transaction_account = account_wechat_cash
-        counterparty_account = account_unknown_expenses
+        transaction_account = ACCOUNT_WECHAT_CASH
+        counterparty_account = ACCOUNT_UNKNOWN_EXPENSES
         flags = "*"
         tags = []
 
@@ -155,13 +180,13 @@ class WeChatImporter(Base):
 
         # ---- Determine direction & accounts based on trade type ----
         if trade_type == "收入":
-            counterparty_account = account_unknown_income
+            counterparty_account = ACCOUNT_UNKNOWN_INCOME
             if status in INCOME_OK_STATUSES:
                 pass
             elif status == "已全额退款" or "已退款" in status:
                 tags.append("refund")
                 # Refunds reduce expenses, counterparty should be expense account
-                counterparty_account = account_unknown_expenses
+                counterparty_account = ACCOUNT_UNKNOWN_EXPENSES
             else:
                 raise ValueError(
                     f"Row {idx}: unknown status '{status}' for income transaction.\n"
@@ -173,7 +198,7 @@ class WeChatImporter(Base):
             if status in EXPENSE_OK_STATUSES:
                 pass
             elif status == "已全额退款" or "已退款" in status:
-                tags.append("refund")
+                tags.append("refunded")
             else:
                 raise ValueError(
                     f"Row {idx}: unknown status '{status}' for expense transaction.\n"
@@ -221,7 +246,7 @@ class WeChatImporter(Base):
 
         return entry
 
-    def _handle_neutral(self, category, status, idx):
+    def _handle_neutral(self, category: str, status: str, idx: str) -> dict[str, str]:
         """Handle neutral transactions (收/支 = /).
 
         Neutral transactions are internal transfers between the user's own accounts
@@ -252,51 +277,51 @@ class WeChatImporter(Base):
         if category == "零钱充值":
             return {
                 "direction": "收入",
-                "transaction_account": account_wechat_cash,
+                "transaction_account": ACCOUNT_WECHAT_CASH,
                 # counterparty → resolved to bank by pay_account rules
-                "counterparty_account": account_unknown_expenses,
+                "counterparty_account": ACCOUNT_UNKNOWN_EXPENSES,
             }
 
         # 零钱提现: WeChat Cash → Bank (money leaves WeChat)
         if category == "零钱提现":
             return {
                 "direction": "支出",
-                "transaction_account": account_wechat_cash,
+                "transaction_account": ACCOUNT_WECHAT_CASH,
                 # counterparty → resolved to bank by pay_account rules
-                "counterparty_account": account_unknown_expenses,
+                "counterparty_account": ACCOUNT_UNKNOWN_EXPENSES,
             }
 
         # 购买理财通: WeChat Cash → LiCai
         if "购买理财通" in category:
             return {
                 "direction": "支出",
-                "transaction_account": account_wechat_cash,
-                "counterparty_account": account_wechat_licai,
+                "transaction_account": ACCOUNT_WECHAT_CASH,
+                "counterparty_account": ACCOUNT_WECHAT_LICAI,
             }
 
         # 转入零钱通-来自零钱: WeChat Cash → LiCai
         if "转入零钱通" in category:
             return {
                 "direction": "支出",
-                "transaction_account": account_wechat_cash,
-                "counterparty_account": account_wechat_licai,
+                "transaction_account": ACCOUNT_WECHAT_CASH,
+                "counterparty_account": ACCOUNT_WECHAT_LICAI,
             }
 
         # 零钱通转出-到零钱: LiCai → WeChat Cash
         if category == "零钱通转出-到零钱":
             return {
                 "direction": "收入",
-                "transaction_account": account_wechat_cash,
-                "counterparty_account": account_wechat_licai,
+                "transaction_account": ACCOUNT_WECHAT_CASH,
+                "counterparty_account": ACCOUNT_WECHAT_LICAI,
             }
 
         # 零钱通转出-到{银行名}({后4位}): LiCai → Bank
         if category.startswith("零钱通转出-到"):
             return {
                 "direction": "支出",
-                "transaction_account": account_wechat_licai,
+                "transaction_account": ACCOUNT_WECHAT_LICAI,
                 # counterparty → resolved to bank by pay_account rules (matching category)
-                "counterparty_account": account_unknown_expenses,
+                "counterparty_account": ACCOUNT_UNKNOWN_EXPENSES,
             }
 
         raise ValueError(

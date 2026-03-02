@@ -52,16 +52,16 @@ rules:
 
 ```bash
 # 对已导入的 bean 文件应用规则
-beancount-postprocess imported.bean rules.yaml -o categorized.bean -v
+bct process imported.bean rules.yaml -o categorized.bean -v
 ```
 
 ### 完整的入门流程
 
 ```
 原始账单 CSV
-    ↓  beancount-import
+    ↓  bct import
 导入后 .bean 文件（账户为 Expenses:Unknown 等）
-    ↓  beancount-postprocess + rules.yaml
+    ↓  bct process + rules.yaml
 分类后 .bean 文件（账户已被规则更新）
     ↓  人工审核
 追加到主账本
@@ -690,11 +690,11 @@ rules:
 
 ```bash
 # 使用 verbose 模式查看匹配情况
-beancount-postprocess imported.bean rules.yaml -v
+bct process imported.bean rules.yaml -v
 
 # 先用小文件测试
 head -20 imported.bean > test.bean
-beancount-postprocess test.bean rules.yaml -o test_out.bean -v
+bct process test.bean rules.yaml -o test_out.bean -v
 ```
 
 ---

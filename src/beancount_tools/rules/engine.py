@@ -1,20 +1,21 @@
 """
-Rule Engine for Tree Rules v2 Specification
+Rule Engine for Tree Rules v2 Specification.
 
 Implements the tree-based rule matching and action execution system.
 Uses MongoDB-inspired syntax with $-prefixed operators.
 
-Key differences from v1:
-- ``match:`` replaces ``when:``
-- ``apply:`` replaces ``then:``
-- Logical operators use $ prefix: $any, $all, $not
-- Plain string = exact match; /pattern/ = regex search
-- Set fields use "contains" semantics
-- Actions use $add/$remove instead of +/- prefix magic
+Key concepts:
+- ``match:`` defines conditions (field predicates, $all/$any/$not operators)
+- ``apply:`` defines actions ($add/$remove/set fields)
+- ``children:`` enables hierarchical rule trees
+- Stop-on-match: first matching sibling wins
+- Condition inheritance: children auto-inherit parent match
 """
 
+from __future__ import annotations
+
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import yaml
 
@@ -25,7 +26,7 @@ class RuleEngine:
     # Operator keys recognized inside a match expression
     _OPERATORS = {"$all", "$any", "$not"}
 
-    def __init__(self, rules_data: Union[str, dict]):
+    def __init__(self, rules_data: str | dict) -> None:
         """
         Initialize the rule engine.
 
@@ -43,8 +44,8 @@ class RuleEngine:
             )
 
     def match_and_apply(
-        self, tx_dict: Dict[str, Any], parent_match: Optional[Dict] = None
-    ) -> Dict[str, Any]:
+        self, tx_dict: dict[str, Any], parent_match: dict | None = None
+    ) -> dict[str, Any]:
         """
         Apply rules to a transaction dictionary.
 
@@ -56,21 +57,43 @@ class RuleEngine:
             Modified transaction dictionary
         """
         rules_list = self.rules.get("rules", [])
-        self._process_nodes(rules_list, tx_dict, parent_match)
+
+        # Start processing and collect the descriptive path
+        matched, path = self._process_nodes(rules_list, tx_dict, parent_match, [])
+
+        # Format output: if matched, print description path to leaf; otherwise print path with X
+        if matched:
+            try:
+                print("Matched rule: " + " -> ".join(path))
+            except Exception:
+                pass
+        else:
+            try:
+                if path:
+                    print("No match: " + " -> ".join(path + ["X"]))
+                else:
+                    print("No match: X")
+            except Exception:
+                pass
+
         return tx_dict
 
     def _process_nodes(
         self,
-        nodes: List[Dict],
-        tx_dict: Dict[str, Any],
-        parent_match: Optional[Dict] = None,
-    ):
+        nodes: list[dict],
+        tx_dict: dict[str, Any],
+        parent_match: dict | None = None,
+        path: list[str] | None = None,
+    ) -> tuple[bool, list[str]]:
         """
         Process a list of rule nodes (siblings).
 
         Implements stop-on-match semantics: when a node matches, execute its
         actions, recurse into children, then stop processing siblings.
         """
+        if path is None:
+            path = []
+
         for node in nodes:
             # Calculate effective match condition (parent AND current)
             current_match = node.get("match", {})
@@ -79,7 +102,18 @@ class RuleEngine:
             )
 
             # Evaluate the condition
+            desc = node.get("description")
+            if not desc:
+                # Fallback to using the match condition as description
+                try:
+                    desc = yaml.safe_dump(current_match, default_flow_style=True).strip()
+                except Exception:
+                    desc = str(current_match)
+
             if self._evaluate_match(effective_match, tx_dict):
+                # Append this node's description to path
+                path = path + [desc]
+
                 # Execute actions
                 apply_actions = node.get("apply", {})
                 if apply_actions:
@@ -88,14 +122,25 @@ class RuleEngine:
                 # Recurse into children
                 children = node.get("children", [])
                 if children:
-                    self._process_nodes(children, tx_dict, effective_match)
+                    matched, child_path = self._process_nodes(
+                        children, tx_dict, effective_match, path
+                    )
+                    # If child matched, propagate success and path upward
+                    if matched:
+                        return True, child_path
+                    else:
+                        # Children did not match: report failure path to this level
+                        return False, path
 
-                # Stop processing siblings (stop-on-match)
-                break
+                # Leaf node matched — return success with path
+                return True, path
+
+        # No sibling matched at this level — return failure with current path
+        return False, path or []
 
     def _combine_match_conditions(
-        self, parent_match: Optional[Dict], current_match: Dict
-    ) -> Dict:
+        self, parent_match: dict | None, current_match: dict
+    ) -> dict:
         """
         Combine parent and current match conditions using AND logic.
 
@@ -109,7 +154,7 @@ class RuleEngine:
         # Both exist: create an '$all' expression
         return {"$all": [parent_match, current_match]}
 
-    def _evaluate_match(self, match_expr: Dict, tx_dict: Dict[str, Any]) -> bool:
+    def _evaluate_match(self, match_expr: dict, tx_dict: dict[str, Any]) -> bool:
         """
         Evaluate a match expression against transaction data.
 
@@ -173,7 +218,7 @@ class RuleEngine:
         return all(results) if results else True
 
     def _evaluate_predicate(
-        self, field: str, pattern: str, tx_dict: Dict[str, Any]
+        self, field: str, pattern: str, tx_dict: dict[str, Any]
     ) -> bool:
         """
         Evaluate a single field predicate.
@@ -221,7 +266,7 @@ class RuleEngine:
         # Plain string: exact match (case-sensitive)
         return str(pattern) == field_value
 
-    def _execute_apply(self, apply_actions: Dict[str, Any], tx_dict: Dict[str, Any]):
+    def _execute_apply(self, apply_actions: dict[str, Any], tx_dict: dict[str, Any]) -> None:
         """
         Execute apply actions on transaction dictionary.
 
@@ -243,7 +288,7 @@ class RuleEngine:
                 # Set/replace operation
                 tx_dict[key] = value
 
-    def _add_to_field(self, tx_dict: Dict[str, Any], key: str, value: Any):
+    def _add_to_field(self, tx_dict: dict[str, Any], key: str, value: Any) -> None:
         """
         Add value to a field (list/set semantics with deduplication).
         """
@@ -280,7 +325,7 @@ class RuleEngine:
                 # Convert to list
                 tx_dict[key] = [existing, value]
 
-    def _remove_from_field(self, tx_dict: Dict[str, Any], key: str, value: Any):
+    def _remove_from_field(self, tx_dict: dict[str, Any], key: str, value: Any) -> None:
         """
         Remove value from a field or delete the key entirely.
         """

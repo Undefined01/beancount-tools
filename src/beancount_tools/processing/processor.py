@@ -1,27 +1,32 @@
 """
-Transaction Processor for Beancount Files
+Transaction Processor for Beancount Files.
 
 Loads beancount files, applies rule-based transformations, and writes back.
 """
 
-from typing import Any, Dict
+from __future__ import annotations
+
+from typing import Any
+from collections.abc import Sequence
+import yaml
 
 from beancount import loader
-from beancount.core import data
+from beancount.core.data import Transaction
 from beancount.parser import printer
 
 from beancount_tools.rules import RuleEngine
 
 
-def extract_transaction_fields(transaction: data.Transaction) -> Dict[str, Any]:
+def extract_transaction_fields(transaction: Transaction) -> dict[str, Any]:
     """
     Extract fields from a Beancount Transaction into a flat dictionary.
 
     Includes:
     - Native fields: payee, narration, date, flag
     - All metadata fields
+    - Account fields (from postings, if exactly 2)
     """
-    tx_dict = {
+    tx_dict: dict[str, Any] = {
         "payee": transaction.payee or "",
         "narration": transaction.narration or "",
         "date": str(transaction.date),
@@ -44,8 +49,8 @@ def extract_transaction_fields(transaction: data.Transaction) -> Dict[str, Any]:
 
 
 def update_transaction_meta(
-    transaction: data.Transaction, tx_dict: Dict[str, Any]
-) -> data.Transaction:
+    transaction: Transaction, tx_dict: dict[str, Any]
+) -> Transaction:
     """
     Update transaction metadata from the modified dictionary.
 
@@ -92,7 +97,10 @@ def update_transaction_meta(
 
 
 def process_beancount_file(
-    bean_file: str, rules_file: str, output_file: str = None, verbose: bool = False
+    bean_file: str,
+    rules_file: str | Sequence[str],
+    output_file: str | None = None,
+    verbose: bool = False,
 ) -> None:
     """
     Process a beancount file with rule-based transformations.
@@ -114,14 +122,22 @@ def process_beancount_file(
         for error in errors[:5]:  # Show first 5 errors
             print(f"  {error}")
 
-    # Load rules
-    if verbose:
-        print(f"Loading rules from: {rules_file}")
+    rule_engines: list[RuleEngine] = []
+    if isinstance(rules_file, (list, tuple)):
+        for rf in rules_file:
+            if verbose:
+                print(f"Loading rules from: {rf}")
+            with open(rf, encoding="utf-8") as f:
+                rules_data = f.read()
+            rule_engines.append(RuleEngine(rules_data))
+    else:
+        assert isinstance(rules_file, str)
+        if verbose:
+            print(f"Loading rules from: {rules_file}")
 
-    with open(rules_file, "r", encoding="utf-8") as f:
-        rules_data = f.read()
-
-    rule_engine = RuleEngine(rules_data)
+        with open(rules_file, encoding="utf-8") as f:
+            rules_data = f.read()
+        rule_engines.append(RuleEngine(rules_data))
 
     # Process transactions
     modified_entries = []
@@ -129,7 +145,7 @@ def process_beancount_file(
     modified_count = 0
 
     for entry in entries:
-        if isinstance(entry, data.Transaction):
+        if isinstance(entry, Transaction):
             transaction_count += 1
 
             # Extract fields
@@ -137,7 +153,12 @@ def process_beancount_file(
             original_meta = dict(tx_dict)
 
             # Apply rules
-            rule_engine.match_and_apply(tx_dict)
+            if verbose:
+                print(
+                    f"\nProcessing transaction: {entry.date} {entry.payee} {entry.narration}"
+                )
+            for rule_engine in rule_engines:
+                rule_engine.match_and_apply(tx_dict)
 
             # Check if modified
             if tx_dict != original_meta:

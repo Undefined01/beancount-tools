@@ -1,279 +1,291 @@
 # Beancount Tools
 
-Beancount importers and transaction processing tools for Chinese financial institutions.
+> Beancount 导入工具与规则化记账处理器。
 
-## Features
+## 功能一览
 
-- **Multi-format importers** for major Chinese banks and payment platforms
-- **Automatic deduplication** to prevent duplicate imports
-- **Rule-based transaction categorization** using tree-based rules
-- **Batch processing** support for multiple files
-- **Unmatched transaction reporting** for reconciliation
+| 功能 | 说明 |
+|------|------|
+| **多格式导入** | 支持支付宝 CSV、微信支付 CSV / XLSX 等格式 |
+| **自动去重** | 基于订单号和时间戳识别重复交易 |
+| **规则引擎** | 树形 YAML 规则，自动分类、打标签、修改账户 |
+| **文件转换** | XLSX → UTF-8 CSV 批量转换 |
+| **统一 CLI** | 单一入口 `bct`，子命令设计，简洁高效 |
 
-## Supported Institutions
-
-| Institution | Format | Importer |
-|------------|--------|----------|
-| Alipay (支付宝) | CSV, ZIP | `AlipayImporter` |
-| WeChat Pay (微信支付) | CSV, ZIP | `WeChatImporter` |
-
-## Installation
+## 快速安装
 
 ```bash
-# Install in development mode
-pip install -e .
-
-# Or using uv
+# 推荐：使用 uv
 uv pip install -e .
+
+# 或者使用 pip
+pip install -e .
 ```
 
-## Quick Start
-
-### 1. Import Transactions
-
-Import transactions from bank/payment platform files:
+安装后将获得 `bct` 命令：
 
 ```bash
-# Import single file
-beancount-import alipay.csv -o imported.bean
-
-# Import multiple files at once
-beancount-import alipay.csv wechat.csv icbc.eml -o imported.bean
-
-# Dry run to preview
-beancount-import alipay.csv --dry-run
+bct --version        # 查看版本
+bct --help           # 查看帮助
 ```
 
-**Important**: Imported transactions will have generic placeholder accounts like `Expenses:Unknown` or `Income:Unknown`. You must run postprocessing to categorize them.
-
-### 2. Categorize with Rules
-
-Apply rule-based categorization to assign proper accounts:
+## 30 秒上手
 
 ```bash
-# Process transactions with rules
-beancount-postprocess imported.bean config/rules.yaml
+# 1. 导入支付宝账单
+bct import 支付宝交易记录.csv -o imported.bean
 
-# Or specify output file
-beancount-postprocess imported.bean config/rules.yaml -o categorized.bean
+# 2. 用规则自动分类
+bct process imported.bean rules.yaml -o categorized.bean
 
-# Verbose mode
-beancount-postprocess imported.bean config/rules.yaml -v
+# 3. 审核后合并到主账本
+cat categorized.bean >> main.bean
 ```
 
-### 3. Review and Merge
-
-Review the categorized transactions and merge into your main beancount file.
-
-## Workflow
+## 完整工作流
 
 ```
 ┌─────────────────┐
-│  Bank/Payment   │
-│  Export Files   │
-│  (CSV/XLS/EML)  │
+│  导出账单文件     │   ← 从支付宝/微信下载
+│  (CSV / XLSX)    │
 └────────┬────────┘
          │
          ▼
 ┌─────────────────────────────┐
-│  beancount-import           │
-│  • Parse transactions       │
-│  • Deduplicate              │
-│  • Generic accounts         │
+│  bct import                  │   ← 解析交易、自动检测格式
+│  → 生成 Beancount 交易       │     账户暂为 Expenses:Unknown
 └────────┬────────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│  imported.bean  │
-│  (Uncategorized)│
-└────────┬────────┘
          │
          ▼
 ┌─────────────────────────────┐
-│  beancount-postprocess      │
-│  • Apply rules.yaml         │
-│  • Categorize accounts      │
-│  • Add metadata             │
+│  bct process                 │   ← 应用 YAML 规则
+│  → 分类账户、添加标签         │     替换 Unknown 为具体类别
 └────────┬────────────────────┘
          │
          ▼
 ┌─────────────────┐
-│ categorized.bean│
-│  (Ready to use) │
+│  categorized.bean│   ← 审核后追加到主账本
 └─────────────────┘
 ```
 
-## Documentation
+## CLI 命令
 
-- [CLI Reference](docs/CLI.md) - Command-line interface documentation
-- [Rule Engine](docs/RULES.md) - How to write categorization rules
-- [Postprocessor](docs/POSTPROCESSOR.md) - Transaction processing details
-- [Importers](docs/IMPORTERS.md) - Importer details and file formats
+### `bct import` — 导入交易
 
-## Configuration
+```bash
+# 单文件导入
+bct import alipay.csv -o imported.bean
 
-### rules.yaml
+# 多文件批量导入
+bct import alipay.csv wechat.csv -o imported.bean
 
-Define tree-based rules for transaction categorization:
+# 预览（不写文件）
+bct import alipay.csv --dry-run
+
+# 追加模式（不覆盖已有内容）
+bct import alipay.csv -o imported.bean --append
+
+# 详细输出
+bct import alipay.csv -o imported.bean -v
+```
+
+### `bct process` — 规则处理
+
+```bash
+# 输出到新文件
+bct process imported.bean rules.yaml -o categorized.bean
+
+# 原地更新
+bct process imported.bean rules.yaml
+
+# 详细模式，查看哪些规则匹配了
+bct process imported.bean rules.yaml -o categorized.bean -v
+```
+
+### `bct convert` — 文件转换
+
+```bash
+# XLSX 转 CSV
+bct convert data.xlsx
+
+# 指定输出路径
+bct convert data.xlsx -o output.csv
+
+# 批量转换
+bct convert *.xlsx -o csv_output/
+```
+
+## 支持的文件格式
+
+| 平台 | 格式 | 导入器 |
+|------|------|--------|
+| 支付宝 (Alipay) | CSV | `AlipayImporter` |
+| 微信支付 (WeChat Pay) | CSV, XLSX | `WeChatImporter` |
+
+## 规则引擎入门
+
+规则文件使用 YAML 格式，核心是 `match` + `apply`：
 
 ```yaml
 rules:
+  # 按交易对方分类
   - match:
       payee: /美团/
     apply:
       counterpartyAccount: Expenses:Food:Delivery
-    children:
-      - match:
-          narration: /早餐/
-        apply:
-          counterpartyAccount: Expenses:Food:Breakfast
-```
 
-See [Rule Engine Documentation](docs/RULES.md) for complete syntax.
-
-## Examples
-
-### Import and Process
-
-```bash
-# Step 1: Import from Alipay
-beancount-import alipay_202401.csv -o jan_imported.bean -v
-
-# Step 2: Categorize transactions
-beancount-postprocess jan_imported.bean config/rules.yaml -o jan_categorized.bean -v
-
-# Step 3: Review and append to main file
-cat jan_categorized.bean >> main.bean
-```
-
-### Batch Import Multiple Sources
-
-```bash
-# Import from multiple sources at once
-beancount-import \
-  alipay_202401.csv \
-  wechat_202401.csv \
-  icbc_statement.eml \
-  \
-  -o jan_all.bean \
-  --unmatched-report unmatched.bean
-```
-
-### Generate Unmatched Report
-
-```bash
-# Import with unmatched transaction report
-beancount-import alipay.csv -o imported.bean \
-  --unmatched-report unmatched.bean
-
-# Review unmatched transactions
-cat unmatched.bean
-```
-
-## Project Structure
-
-```
-beancount-tools/
-├── src/beancount_tools/
-│   ├── cli/              # Command-line interfaces
-│   ├── importers/        # Bank/platform importers
-│   ├── processing/       # Transaction processing
-│   ├── rules/            # Rule engine
-│   └── utils/            # Utilities
-├── config/
-│   ├── rules.yaml        # Categorization rules
-│   └── pay_account.yaml  # Payment account mappings
-├── tests/                # Test files
-└── docs/                 # Documentation
-```
-
-## Development
-
-### Running Tests
-
-```bash
-pytest tests/
-```
-
-### Adding a New Importer
-
-1. Create importer class in `src/beancount_tools/importers/`
-2. Follow the pattern from `alipay_prove.py`:
-   - First posting: counterparty (generic account)
-   - Second posting: user's account (specific)
-3. Add to `IMPORTERS` list in `cli/import.py`
-4. Update documentation
-
-### Writing Rules
-
-Rules use tree-based matching with stop-on-match semantics:
-
-```yaml
-rules:
+  # 带子规则的层级分类
   - match:
       payee: /滴滴/
     apply:
       counterpartyAccount: Expenses:Transport:Taxi
+    children:
+      - match:
+          narration: /快车/
+        apply:
+          counterpartyAccount: Expenses:Transport:Taxi:Express
+
+  # 兜底：未匹配的交易打标签
+  - apply:
       $add:
-        tags: transport
+        tags: need_review
 ```
 
-See [Rule Engine Documentation](docs/RULES.md) for details.
+### 匹配模式
 
-## Design Philosophy
+| 写法 | 含义 |
+|------|------|
+| `payee: 美团` | 精确匹配 |
+| `payee: /美团/` | 正则搜索（包含即匹配） |
+| `payee: /^美团/` | 以「美团」开头 |
+| `tags: refund` | tags 集合包含 "refund" |
 
-### Separation of Concerns
+### 逻辑运算符
 
-- **Importers**: Parse transactions, identify direction, use generic accounts
-- **Rules**: Categorize transactions based on patterns
-- **Postprocessor**: Apply rules to update accounts
+```yaml
+# OR：任一匹配即可
+match:
+  $any:
+    - payee: /美团/
+    - payee: /饿了么/
 
-### Why Generic Accounts?
+# AND：全部满足
+match:
+  $all:
+    - payee: /美团/
+    - narration: /外卖/
 
-Importers use `Expenses:Unknown` and `Income:Unknown` because:
+# NOT：取反
+match:
+  $not:
+    narration: /退款/
+```
 
-1. **Flexibility**: Change categorization without re-importing
-2. **Maintainability**: Rules are easier to update than code
-3. **Consistency**: All categorization through one system
-4. **Transparency**: Clear what needs categorization
+→ 完整规则语法请参考 [规则引擎文档](docs/RULES.md)
 
-## Troubleshooting
+## 项目结构
 
-### No transactions imported
+```
+beancount-tools/
+├── pyproject.toml               # 项目配置、依赖
+├── src/beancount_tools/
+│   ├── __init__.py              # 公共 API
+│   ├── py.typed                 # PEP 561 类型标记
+│   ├── cli/                     # Click CLI
+│   │   ├── __init__.py
+│   │   └── main.py              # bct 命令组
+│   ├── importers/               # 导入器
+│   │   ├── __init__.py          # 注册表 + detect_importer()
+│   │   ├── base.py              # BaseImporter ABC
+│   │   ├── alipay.py            # 支付宝
+│   │   └── wechat.py            # 微信支付
+│   ├── processing/              # 交易处理
+│   │   ├── __init__.py
+│   │   ├── processor.py         # 规则应用引擎
+│   │   └── deduplicate.py       # 去重逻辑
+│   ├── rules/                   # 规则引擎
+│   │   ├── __init__.py
+│   │   └── engine.py            # RuleEngine
+│   └── utils/                   # 工具函数
+│       ├── __init__.py
+│       ├── helpers.py            # BQL 结果解析等
+│       └── convert.py            # XLSX → CSV
+├── docs/                        # 文档
+│   ├── CLI.md
+│   ├── RULES.md
+│   ├── POSTPROCESSOR.md
+│   ├── QUICKREF.md
+│   └── example/                 # 示例规则文件
+└── tools/                       # 独立脚本
+    └── xlsx_to_csv.py
+```
 
-- Check file format matches expected format
-- Use `--verbose` to see detailed error messages
-- Verify file encoding (should be GBK for Chinese files)
+## 编程接口 (API)
 
-### Duplicate transactions
+除了 CLI，也可以在 Python 中直接使用：
 
-- Ensure you're using the correct beancount file for deduplication
-- Check transaction timestamps and unique IDs
-- Review unmatched report for details
+```python
+from beancount_tools import detect_importer, RuleEngine, process_beancount_file
 
-### Rules not applying
+# 1. 导入交易
+importer = detect_importer("alipay.csv")
+transactions = importer.parse()
 
-- Verify YAML syntax is correct
-- Use verbose mode to see which rules match
-- Check field names match transaction metadata
-- Test with simple rules first
+# 2. 应用规则
+engine = RuleEngine(open("rules.yaml").read())
+for tx in transactions:
+    tx_dict = extract_transaction_fields(tx)
+    engine.match_and_apply(tx_dict)
 
-## Contributing
+# 3. 或者直接一步到位
+process_beancount_file("imported.bean", "rules.yaml", output_file="out.bean")
+```
 
-Contributions welcome! Please:
+## 开发
 
-1. Follow existing code style
-2. Add tests for new features
-3. Update documentation
-4. Keep importers simple (no account guessing)
+```bash
+# 安装开发依赖
+uv pip install -e .
 
-Formatter:
+# 代码格式化
+ruff format src/
+ruff check src/ --fix
 
-- Use `black` for Python code
-- Use `prettier` for YAML files
-- Use `markdownlint` for documentation
-- Use `beancount-format` for beancount files
+# 类型检查
+mypy src/beancount_tools/
+```
 
-## Acknowledgments
+### 添加新导入器
 
-Built for the beancount ecosystem. Thanks to the beancount community for the excellent double-entry accounting system.
+1. 在 `src/beancount_tools/importers/` 下新建文件
+2. 继承 `BaseImporter`，实现 `__init__`、`parse`、`can_handle`
+3. 在 `importers/__init__.py` 的 `IMPORTERS` 列表中注册
+4. 更新文档
+
+```python
+from beancount_tools.importers.base import BaseImporter
+
+class MyBankImporter(BaseImporter):
+    @staticmethod
+    def can_handle(path):
+        return path.suffix == ".csv" and "mybank" in path.name
+
+    def __init__(self, filename):
+        # 加载和校验文件 ...
+
+    def parse(self):
+        # 返回 beancount Transaction 列表 ...
+```
+
+## 文档
+
+| 文档 | 内容 |
+|------|------|
+| [CLI 参考](docs/CLI.md) | 所有命令、选项、示例 |
+| [规则引擎](docs/RULES.md) | 完整规则语法与实战案例 |
+| [后处理器](docs/POSTPROCESSOR.md) | 处理流程与内部机制 |
+| [速查表](docs/QUICKREF.md) | 日常使用快速参考 |
+
+## 许可证
+
+MIT

@@ -1,41 +1,31 @@
-# Quick Reference
+# 速查表
 
-Quick reference for beancount-tools commands and rules.
+日常使用 beancount-tools 的快速参考。
 
-## Commands
+---
 
-### Import Transactions
-
-```bash
-# Single file
-beancount-import file.csv -b main.bean -o imported.bean
-
-# Multiple files
-beancount-import *.csv *.eml -b main.bean -o imported.bean
-
-# Dry run
-beancount-import file.csv -b main.bean --dry-run
-
-# With unmatched report
-beancount-import file.csv -b main.bean -o imported.bean --unmatched-report
-```
-
-### Apply Rules
+## 命令速查
 
 ```bash
-# In-place
-beancount-postprocess imported.bean config/rules.yaml
+# 导入
+bct import alipay.csv -o imported.bean
+bct import alipay.csv wechat.csv -o imported.bean -v
+bct import alipay.csv --dry-run
 
-# To new file
-beancount-postprocess imported.bean config/rules.yaml -o categorized.bean
+# 处理
+bct process imported.bean rules.yaml -o categorized.bean
+bct process imported.bean rules.yaml -v
 
-# Verbose
-beancount-postprocess imported.bean config/rules.yaml -v
+# 转换
+bct convert data.xlsx
+bct convert data.xlsx -o output.csv
 ```
 
-## Rule Syntax
+---
 
-### Basic Rule
+## 规则语法速查
+
+### 基本规则
 
 ```yaml
 rules:
@@ -45,7 +35,7 @@ rules:
       counterpartyAccount: Expenses:Food:Delivery
 ```
 
-### With Children
+### 子规则
 
 ```yaml
 rules:
@@ -60,69 +50,95 @@ rules:
           counterpartyAccount: Expenses:Food:Breakfast
 ```
 
-### Multiple Conditions
+### 多条件 (AND)
 
 ```yaml
-rules:
-  - match:
-      $all:
-        - payee: /美团/
-        - narration: /外卖/
-    apply:
-      counterpartyAccount: Expenses:Food:Delivery
+match:
+  $all:
+    - payee: /美团/
+    - narration: /外卖/
 ```
 
-### OR Conditions
+### 多选一 (OR)
 
 ```yaml
-rules:
-  - match:
-      $any:
-        - payee: /美团/
-        - payee: /饿了么/
-    apply:
-      counterpartyAccount: Expenses:Food:Delivery
+match:
+  $any:
+    - payee: /美团/
+    - payee: /饿了么/
 ```
 
-### Add Tags
+### 取反 (NOT)
 
 ```yaml
+match:
+  $not:
+    narration: /退款/
+```
+
+### 标签操作
+
+```yaml
+# 添加标签
 apply:
-  counterpartyAccount: Expenses:Food:Delivery
   $add:
     tags: food
-```
 
-### Remove Tags
-
-```yaml
+# 移除标签
 apply:
   $remove:
     tags: uncategorized
 ```
 
-## Pattern Matching
+---
 
-### Exact Match
+## 匹配模式
 
-```yaml
-match:
-  payee: 美团  # Matches only if payee is exactly "美团"
-```
+| 写法 | 含义 | 示例 |
+|------|------|------|
+| `payee: 美团` | 精确匹配 | 仅匹配 "美团" |
+| `payee: /美团/` | 包含 | "美团外卖" ✓ |
+| `payee: /^美团/` | 开头 | "美团" ✓ "我在美团" ✗ |
+| `payee: /美团$/` | 结尾 | "去美团" ✓ |
+| `narration: /早餐\|午餐/` | 多选 | 匹配任一 |
+| `tags: refund` | 集合包含 | tags 中有 "refund" |
 
-### Regex Search
+---
 
-```yaml
-match:
-  payee: /^美团/              # Starts with
-  payee: /美团$/              # Ends with
-  payee: /美团|饿了么/        # OR
-  narration: /早餐|午餐|晚餐/  # Multiple options
-```
+## 常用字段
 
-## Common Patterns
+### 交易字段
 
-### Food Delivery
+| 字段 | 说明 | 类型 |
+|------|------|------|
+| `payee` | 交易对方 | 字符串 |
+| `narration` | 商品说明 | 字符串 |
+| `date` | 日期 (YYYY-MM-DD) | 字符串 |
+| `flag` | 标记 (`*` / `!`) | 字符串 |
+| `tags` | 标签集合 | set |
+
+### 账户字段
+
+| 字段 | 说明 |
+|------|------|
+| `counterpartyAccount` | 对方账户（第一个 posting） |
+| `transactionAccount` | 己方账户（第二个 posting） |
+
+### 元数据字段
+
+| 字段 | 说明 | 来源 |
+|------|------|------|
+| `source` | 来源 (`alipay` / `wechat`) | 所有 |
+| `category` | 交易分类 | 所有 |
+| `transaction_id` | 交易单号 | 所有 |
+| `alipay_account` | 支付宝付款方式 | Alipay |
+| `wechat_account` | 微信支付方式 | WeChat |
+
+---
+
+## 常见规则模板
+
+### 餐饮
 
 ```yaml
 - match:
@@ -131,113 +147,64 @@ match:
       - payee: /饿了么/
   apply:
     counterpartyAccount: Expenses:Food:Delivery
-    $add:
-      tags: food
 ```
 
-### Transportation
+### 交通
 
 ```yaml
 - match:
     $any:
       - payee: /滴滴/
-      - payee: /Uber/
+      - payee: /高德/
   apply:
     counterpartyAccount: Expenses:Transport:Taxi
-    $add:
-      tags: transport
 ```
 
-### Shopping
+### 退款
 
 ```yaml
 - match:
-    $any:
-      - payee: /淘宝/
-      - payee: /京东/
-  apply:
-    counterpartyAccount: Expenses:Shopping:Online
-    $add:
-      tags: shopping
-```
-
-### Refunds
-
-```yaml
-- match:
-    narration: /退款/
+    tags: refund
   apply:
     flag: "!"
-    $add:
-      tags: refund
 ```
 
-## Workflow
+### 兜底
+
+```yaml
+- apply:
+    $add:
+      tags: need_review
+```
+
+---
+
+## 工作流
 
 ```bash
-# 1. Import
-beancount-import alipay.csv -b main.bean -o imported.bean -v
+# 1. 导入
+bct import alipay.csv -o imported.bean -v
 
-# 2. Categorize
-beancount-postprocess imported.bean config/rules.yaml -o categorized.bean -v
+# 2. 分类
+bct process imported.bean rules.yaml -o categorized.bean -v
 
-# 3. Review
+# 3. 审核
 less categorized.bean
 
-# 4. Validate
+# 4. 验证
 bean-check categorized.bean
 
-# 5. Merge
+# 5. 合并
 cat categorized.bean >> main.bean
 ```
 
-## Troubleshooting
+---
 
-### No transactions imported
-- Check file format
-- Use `--verbose`
-- Try `--dry-run`
+## 排错
 
-### Rules not applying
-- Use `-v` to see matches
-- Check YAML syntax
-- Verify field names
-- Test regex patterns
-
-### Duplicates
-- Ensure correct `-b` file
-- Check transaction IDs
-- Review unmatched report
-
-## File Formats
-
-| Format | Extension | Institution |
-|--------|-----------|-------------|
-| CSV | .csv | Alipay, WeChat |
-| ZIP | .zip | Alipay, WeChat |
-| EML | .eml | ICBC, ABC |
-| XLS | .xls | CCB, YuEBao |
-| HTML | .html | ICBC |
-
-## Fields
-
-### Transaction Fields
-- `payee` - Payee name
-- `narration` - Description
-- `date` - Date (YYYY-MM-DD)
-- `flag` - Flag (*, !)
-- `tags` - Tags set
-
-### Account Fields
-- `counterpartyAccount` - First posting
-- `transactionAccount` - Second posting
-
-### Metadata
-- Any custom field from importer
-- `alipay_trade_no`, `timestamp`, etc.
-
-## See Also
-
-- [Full CLI Reference](docs/CLI.md)
-- [Rule Engine Guide](docs/RULES.md)
-- [Postprocessor Details](docs/POSTPROCESSOR.md)
+| 问题 | 解决 |
+|------|------|
+| 没导入交易 | 检查文件格式，用 `-v` 和 `--dry-run` |
+| 规则不生效 | 用 `-v` 看匹配情况，验证 YAML 语法 |
+| 编码错误 | 支付宝自动处理 GBK，微信用 UTF-8 |
+| 账户错误 | 检查规则顺序（首中即停） |

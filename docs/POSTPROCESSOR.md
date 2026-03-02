@@ -30,6 +30,8 @@ The postprocessor applies rule-based transformations to beancount transactions. 
 
 ```
 Import → Generic Accounts → Postprocess → Categorized Accounts
+
+bct import  →  bct process  →  categorized.bean
 ```
 
 ---
@@ -502,7 +504,7 @@ apply:
 #### In-Place Update
 
 ```bash
-beancount-postprocess transactions.bean rules.yaml
+bct process transactions.bean rules.yaml
 ```
 
 Overwrites `transactions.bean` with processed version.
@@ -510,7 +512,7 @@ Overwrites `transactions.bean` with processed version.
 #### Output File
 
 ```bash
-beancount-postprocess transactions.bean rules.yaml -o output.bean
+bct process transactions.bean rules.yaml -o output.bean
 ```
 
 Writes to `output.bean`, preserves original.
@@ -542,7 +544,7 @@ Writes to `output.bean`, preserves original.
 #### Invalid YAML
 
 ```bash
-$ beancount-postprocess transactions.bean rules.yaml
+$ bct process transactions.bean rules.yaml
 Error: Invalid YAML syntax in rules.yaml
 ```
 
@@ -573,7 +575,7 @@ Regex errors are caught and treated as non-matches.
 #### Verbose Mode
 
 ```bash
-beancount-postprocess transactions.bean rules.yaml -v
+bct process transactions.bean rules.yaml -v
 ```
 
 Shows:
@@ -587,7 +589,7 @@ Process a copy first:
 
 ```bash
 cp transactions.bean test.bean
-beancount-postprocess test.bean rules.yaml -v
+bct process test.bean rules.yaml -v
 less test.bean
 ```
 
@@ -598,7 +600,7 @@ Test rules on small subsets:
 ```bash
 # Extract first 10 transactions
 head -50 transactions.bean > test.bean
-beancount-postprocess test.bean rules.yaml -v
+bct process test.bean rules.yaml -v
 ```
 
 ---
@@ -690,4 +692,4 @@ def update_transaction_meta(transaction, tx_dict):
 
 - [CLI Reference](CLI.md) - Command-line usage
 - [Rule Engine](RULES.md) - Rule syntax and semantics
-- [Examples](../config/rules.yaml) - Sample rules
+- [Examples](../docs/example/) - Sample rules

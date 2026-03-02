@@ -1,19 +1,22 @@
 """
-Beancount Tools - Importers and transaction processing for Chinese financial institutions.
+Beancount Tools – importers and transaction processing for Chinese financial institutions.
 """
 
-__version__ = "0.1.0"
+from __future__ import annotations
 
-# Expose main components
-from .importers import AlipayImporter, Base, WeChatImporter
+__version__ = "0.2.0"
+
+# Expose main public API
+from .importers import AlipayImporter, BaseImporter, WeChatImporter, detect_importer
 from .processing import process_beancount_file
 from .rules import RuleEngine
 
 __all__ = [
     "__version__",
-    "RuleEngine",
-    "process_beancount_file",
-    "Base",
+    "BaseImporter",
     "AlipayImporter",
     "WeChatImporter",
+    "detect_importer",
+    "RuleEngine",
+    "process_beancount_file",
 ]
